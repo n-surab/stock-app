@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1F5C4D">
+<title>Stock Élan Solidaire</title>
+<style>
+  :root { --vert:#1F5C4D; --vert-clair:#e8f3ef; --rouge:#b3261e; --orange:#b26a00; --gris:#5f6b68; --bord:#d4dcd9; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:16px/1.4 Arial, Helvetica, sans-serif; color:#1b2321; background:#f4f7f6; padding-bottom:76px; }
+  header { background:var(--vert); color:#fff; padding:14px 16px; font-weight:bold; font-size:18px; display:flex; justify-content:space-between; align-items:center; }
+  header small { font-weight:normal; font-size:13px; opacity:.85; }
+  main { max-width:560px; margin:0 auto; padding:14px; }
+  .vue { display:none; } .vue.active { display:block; }
+  h2 { margin:6px 0 12px; font-size:20px; }
+  label { display:block; font-weight:bold; margin:12px 0 4px; }
+  input, select, textarea { width:100%; font:inherit; padding:12px; border:1px solid var(--bord); border-radius:10px; background:#fff; }
+  button { font:inherit; font-weight:bold; border:0; border-radius:12px; padding:14px 16px; cursor:pointer; background:var(--vert); color:#fff; width:100%; }
+  button.secondaire { background:#fff; color:var(--vert); border:2px solid var(--vert); }
+  button.discret { background:none; color:var(--gris); font-weight:normal; text-decoration:underline; padding:8px; }
+  button:disabled { opacity:.5; }
+  .carte { background:#fff; border:1px solid var(--bord); border-radius:14px; padding:14px; margin-bottom:12px; }
+  .grille { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .lecteur { position:relative; background:#000; border-radius:14px; overflow:hidden; min-height:240px; }
+  .lecteur video { width:100%; display:block; }
+  .viseur { position:absolute; inset:25% 12%; border:3px solid rgba(255,255,255,.85); border-radius:12px; pointer-events:none; }
+  .msg { padding:12px; border-radius:10px; margin:10px 0; background:var(--vert-clair); }
+  .msg.err { background:#fde8e6; color:var(--rouge); }
+  .gros { font-size:42px; font-weight:bold; line-height:1.1; }
+  .pastille { display:inline-block; padding:3px 10px; border-radius:999px; font-size:13px; font-weight:bold; background:var(--vert-clair); color:var(--vert); }
+  .pastille.rouge { background:#fde8e6; color:var(--rouge); }
+  .pastille.orange { background:#fff1db; color:var(--orange); }
+  .type { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:10px 0; }
+  .type button { background:#fff; color:#1b2321; border:2px solid var(--bord); }
+  .type button.choisi.entree { background:var(--vert); color:#fff; border-color:var(--vert); }
+  .type button.choisi.sortie { background:#8a3b12; color:#fff; border-color:#8a3b12; }
+  .quantite { display:grid; grid-template-columns:64px 1fr 64px; gap:8px; }
+  .quantite input { text-align:center; font-size:24px; font-weight:bold; }
+  .quantite button { font-size:26px; padding:8px; }
+  .ligne { display:flex; justify-content:space-between; gap:10px; padding:12px 0; border-bottom:1px solid var(--bord); cursor:pointer; }
+  .ligne:last-child { border-bottom:0; }
+  .ligne .nom { font-weight:bold; } .ligne small { color:var(--gris); display:block; }
+  .ligne .droite { text-align:right; white-space:nowrap; }
+  .filtres { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; }
+  .filtres button { width:auto; padding:8px 14px; background:#fff; color:var(--vert); border:2px solid var(--vert); font-size:14px; }
+  .filtres button.choisi { background:var(--vert); color:#fff; }
+  nav { position:fixed; bottom:0; left:0; right:0; display:grid; grid-template-columns:1fr 1fr; background:#fff; border-top:1px solid var(--bord); padding-bottom:env(safe-area-inset-bottom); }
+  nav button { background:none; color:var(--gris); border-radius:0; padding:16px 0; }
+  nav button.actif { color:var(--vert); box-shadow:inset 0 3px 0 var(--vert); }
+  #toast { position:fixed; left:12px; right:12px; bottom:88px; background:#1b2321; color:#fff; padding:14px; border-radius:12px; display:none; z-index:10; max-width:536px; margin:0 auto; }
+  .cache { display:none !important; }
+</style>
+</head>
+<body>
+<header><span>Stock Élan Solidaire</span><small id="qui"></small></header>
+<main>
+
+  <!-- Connexion -->
+  <section id="v-connexion" class="vue">
+    <h2>Connexion</h2>
+    <div class="carte">
+      <div id="bloc-api" class="cache">
+        <label for="c-api">Adresse du service (fournie par le responsable)</label>
+        <input id="c-api" type="url" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+      </div>
+      <label for="c-nom">Votre prénom</label>
+      <input id="c-nom" type="text" autocomplete="given-name" maxlength="60">
+      <label for="c-pin">Code d'accès</label>
+      <input id="c-pin" type="password" autocomplete="current-password">
+      <p id="c-err" class="msg err cache"></p>
+      <button id="c-ok" style="margin-top:14px">Entrer</button>
+    </div>
+  </section>
+
+  <!-- Scanner -->
+  <section id="v-scan" class="vue">
+    <h2>Scanner un produit</h2>
+    <div class="lecteur cache" id="zone-lecteur">
+      <video id="video" playsinline muted class="cache"></video>
+      <div id="lecteur-h5" class="cache"></div>
+      <div class="viseur" id="viseur"></div>
+    </div>
+    <p id="scan-msg" class="msg">Appuyez sur « Démarrer la caméra ».</p>
+    <button id="scan-go">Démarrer la caméra</button>
+    <button id="scan-stop" class="secondaire cache">Arrêter</button>
+    <div class="carte" style="margin-top:14px">
+      <label for="manuel">Ou saisir / scanner avec une douchette</label>
+      <form id="form-manuel" style="display:grid;grid-template-columns:1fr auto;gap:8px">
+        <input id="manuel" type="text" inputmode="numeric" autocomplete="off" placeholder="Code-barres">
+        <button style="width:auto">OK</button>
+      </form>
+      <label for="photo" style="font-weight:normal;margin-top:14px">Si la caméra en direct ne marche pas : prendre une photo du code</label>
+      <input id="photo" type="file" accept="image/*" capture="environment">
+    </div>
+  </section>
+
+  <!-- Produit / mouvement -->
+  <section id="v-produit" class="vue">
+    <div class="carte">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:start">
+        <div><div id="p-nom" style="font-size:20px;font-weight:bold"></div><small id="p-infos" style="color:var(--gris)"></small></div>
+        <span id="p-alerte" class="pastille cache">À réapprovisionner</span>
+      </div>
+      <div style="margin-top:10px"><span class="gros" id="p-stock"></span> <span id="p-unite" style="color:var(--gris)"></span></div>
+      <div id="p-per" style="margin-top:6px"></div>
+    </div>
+    <div class="type">
+      <button id="t-entree" class="entree choisi">Entrée</button>
+      <button id="t-sortie" class="sortie">Sortie</button>
+    </div>
+    <label for="q">Quantité</label>
+    <div class="quantite">
+      <button id="q-moins" aria-label="Moins">−</button>
+      <input id="q" type="number" inputmode="decimal" min="0" step="any" value="1">
+      <button id="q-plus" aria-label="Plus">+</button>
+    </div>
+    <div id="bloc-per">
+      <label for="per">Date de péremption (facultatif)</label>
+      <input id="per" type="date">
+    </div>
+    <label for="note">Note (facultatif)</label>
+    <input id="note" type="text" maxlength="200" placeholder="Don, collecte, distribution…">
+    <p id="p-err" class="msg err cache"></p>
+    <button id="p-ok" style="margin-top:14px">Enregistrer</button>
+    <button id="p-annuler" class="discret">Annuler</button>
+  </section>
+
+  <!-- Nouveau produit -->
+  <section id="v-creer" class="vue">
+    <h2>Nouveau produit</h2>
+    <p class="msg">Ce code-barres n'existe pas encore. Renseignez le produit une fois, il sera reconnu ensuite.</p>
+    <div class="carte">
+      <label for="n-code">Code-barres</label><input id="n-code" readonly>
+      <label for="n-nom">Nom du produit *</label><input id="n-nom" maxlength="100" placeholder="Ex. Pâtes 500 g">
+      <label for="n-cat">Catégorie</label><select id="n-cat"></select>
+      <label for="n-unite">Unité</label><select id="n-unite"></select>
+      <label for="n-empl">Emplacement</label><input id="n-empl" maxlength="60" placeholder="Ex. Étagère A1">
+      <label for="n-seuil">Seuil d'alerte (réapprovisionner en dessous)</label><input id="n-seuil" type="number" inputmode="decimal" min="0" value="0">
+      <p id="n-err" class="msg err cache"></p>
+      <button id="n-ok" style="margin-top:14px">Créer le produit</button>
+      <button id="n-annuler" class="discret">Annuler</button>
+    </div>
+  </section>
+
+  <!-- Stock -->
+  <section id="v-stock" class="vue">
+    <h2>Stock</h2>
+    <input id="s-recherche" type="search" placeholder="Rechercher un produit">
+    <div class="filtres" id="s-filtres">
+      <button data-f="tous" class="choisi">Tous</button>
+      <button data-f="alerte">À réapprovisionner</button>
+      <button data-f="per">Péremption proche</button>
+    </div>
+    <div class="carte" id="s-liste"></div>
+  </section>
+</main>
+<nav id="nav">
+  <button data-v="scan" class="actif">Scanner</button>
+  <button data-v="stock">Stock</button>
+</nav>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* Adresse du service Google Apps Script (finit par /exec). Peut aussi être donnée par un lien ?api=... */
+var API_PAR_DEFAUT = '';
+var JOURS_PEREMPTION_PROCHE = 30;
+var FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code'];
+
+var $ = function (id) { return document.getElementById(id); };
+var etat = { type: 'Entrée', produit: null, stock: [], filtre: 'tous', listes: null };
+
+/* ---------- Réglages enregistrés sur l'appareil ---------- */
+function lire(cle) { try { return localStorage.getItem(cle) || ''; } catch (e) { return ''; } }
+function ecrire(cle, val) { try { localStorage.setItem(cle, val); } catch (e) {} }
+(function lireLien() {
+  var p = new URLSearchParams(location.search);
+  if (p.get('api')) { ecrire('es_api', p.get('api')); history.replaceState(null, '', location.pathname); }
+})();
+function adresseApi() { return lire('es_api') || API_PAR_DEFAUT; }
+
+/* ---------- Affichage ---------- */
+function esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function nombre(n) { return String(Math.round(n * 1000) / 1000).replace('.', ','); }
+function montrer(el, oui) { el.classList.toggle('cache', !oui); }
+function erreur(id, texte) { var e = $(id); e.textContent = texte || ''; montrer(e, !!texte); }
+var minuteurToast;
+function toast(texte) {
+  var t = $('toast'); t.textContent = texte; t.style.display = 'block';
+  clearTimeout(minuteurToast); minuteurToast = setTimeout(function () { t.style.display = 'none'; }, 4000);
+}
+function vue(nom) {
+  if (nom !== 'scan') arreterCamera();
+  document.querySelectorAll('.vue').forEach(function (v) { v.classList.toggle('active', v.id === 'v-' + nom); });
+  montrer($('nav'), nom !== 'connexion');
+  document.querySelectorAll('#nav button').forEach(function (b) { b.classList.toggle('actif', b.dataset.v === (nom === 'stock' ? 'stock' : 'scan')); });
+  window.scrollTo(0, 0);
+}
+
+/* ---------- Appels au service ---------- */
+async function appeler(action, donnees) {
+  var url = adresseApi();
+  if (!url) throw new Error("L'adresse du service n'est pas configurée.");
+  var corps = Object.assign({ action: action, pin: lire('es_pin') }, donnees || {});
+  var rep;
+  try {
+    rep = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(corps) });
+  } catch (e) {
+    throw new Error('Pas de connexion au service. Vérifiez le réseau.');
+  }
+  var json;
+  try { json = await rep.json(); } catch (e) { throw new Error('Réponse inattendue du service.'); }
+  if (!json.ok) { var err = new Error(json.erreur || 'Erreur.'); err.donnees = json; throw err; }
+  return json;
+}
+
+/* ---------- Connexion ---------- */
+function ouvrirConnexion(message) {
+  montrer($('bloc-api'), !adresseApi());
+  $('c-nom').value = lire('es_nom'); $('c-pin').value = '';
+  erreur('c-err', message || '');
+  $('qui').textContent = '';
+  vue('connexion');
+}
+$('c-ok').onclick = async function () {
+  var api = $('c-api').value.trim();
+  if (api) ecrire('es_api', api);
+  ecrire('es_nom', $('c-nom').value.trim());
+  ecrire('es_pin', $('c-pin').value);
+  if (!$('c-nom').value.trim()) return erreur('c-err', 'Indiquez votre prénom.');
+  $('c-ok').disabled = true;
+  try { await appeler('ping'); erreur('c-err', ''); demarrer(); }
+  catch (e) { erreur('c-err', e.message); }
+  $('c-ok').disabled = false;
+};
+function demarrer() {
+  $('qui').textContent = lire('es_nom') + ' · changer';
+  $('qui').style.cursor = 'pointer';
+  $('qui').onclick = function () { ouvrirConnexion(); };
+  vue('scan');
+  appeler('listes').then(function (r) { etat.listes = r.listes; }).catch(function () {});
+}
+
+/* ---------- Scan par la caméra ---------- */
+var flux = null, boucle = null, lecteurH5 = null, verrou = false;
+
+function messageScan(t, err) { var m = $('scan-msg'); m.textContent = t; m.classList.toggle('err', !!err); }
+
+async function demarrerCamera() {
+  verrou = false;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    return messageScan("La caméra n'est pas disponible ici. L'appli doit être ouverte en https. Utilisez la saisie ou la photo ci-dessous.", true);
+  }
+  montrer($('scan-go'), false); montrer($('scan-stop'), true); montrer($('zone-lecteur'), true);
+  try {
+    if ('BarcodeDetector' in window) await demarrerNatif(); else await demarrerH5();
+    messageScan('Placez le code-barres dans le cadre.');
+  } catch (e) {
+    arreterCamera();
+    var cause = (e && (e.name || e.message)) || 'accès refusé';
+    messageScan("Impossible d'ouvrir la caméra (" + cause + "). Autorisez la caméra pour ce site, ou utilisez la saisie / la photo.", true);
+  }
+}
+async function demarrerNatif() {
+  var formats = FORMATS;
+  try { var dispo = await BarcodeDetector.getSupportedFormats(); formats = FORMATS.filter(function (f) { return dispo.indexOf(f) >= 0; }); } catch (e) {}
+  var detecteur = new BarcodeDetector({ formats: formats });
+  flux = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+  var v = $('video'); v.srcObject = flux; montrer(v, true); await v.play();
+  var occupe = false;
+  boucle = setInterval(async function () {
+    if (occupe) return; occupe = true;
+    try { var r = await detecteur.detect(v); if (r.length) trouve(r[0].rawValue); } catch (e) {}
+    occupe = false;
+  }, 250);
+}
+function chargerH5() {
+  return new Promise(function (ok, ko) {
+    if (window.Html5Qrcode) return ok();
+    var s = document.createElement('script');
+    s.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+    s.onload = ok; s.onerror = function () { ko(new Error('bibliothèque de scan non chargée')); };
+    document.head.appendChild(s);
+  });
+}
+async function demarrerH5() {
+  await chargerH5();
+  montrer($('lecteur-h5'), true);
+  var F = Html5QrcodeSupportedFormats;
+  lecteurH5 = new Html5Qrcode('lecteur-h5', { formatsToSupport: [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.QR_CODE] });
+  await lecteurH5.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 260, height: 160 } }, function (txt) { trouve(txt); }, function () {});
+}
+function arreterCamera() {
+  clearInterval(boucle); boucle = null;
+  if (flux) { flux.getTracks().forEach(function (t) { t.stop(); }); flux = null; }
+  var v = $('video'); v.srcObject = null; montrer(v, false);
+  if (lecteurH5) { try { lecteurH5.stop().catch(function () {}); } catch (e) {} lecteurH5 = null; }
+  montrer($('lecteur-h5'), false); montrer($('zone-lecteur'), false);
+  montrer($('scan-go'), true); montrer($('scan-stop'), false);
+}
+function trouve(code) {
+  if (verrou) return; verrou = true;
+  if (navigator.vibrate) navigator.vibrate(60);
+  arreterCamera();
+  traiterCode(code);
+}
+$('scan-go').onclick = demarrerCamera;
+$('scan-stop').onclick = function () { arreterCamera(); messageScan('Caméra arrêtée.'); };
+$('form-manuel').onsubmit = function (e) { e.preventDefault(); var c = $('manuel').value; $('manuel').value = ''; if (c.trim()) traiterCode(c); };
+$('photo').onchange = async function () {
+  var fichier = this.files[0]; this.value = '';
+  if (!fichier) return;
+  messageScan('Lecture de la photo…');
+  try {
+    var code = null;
+    if ('BarcodeDetector' in window) {
+      var r = await new BarcodeDetector({ formats: FORMATS }).detect(await createImageBitmap(fichier));
+      if (r.length) code = r[0].rawValue;
+    } else {
+      await chargerH5();
+      var zone = $('lecteur-h5'); montrer(zone, true); montrer($('zone-lecteur'), true);
+      var h5 = new Html5Qrcode('lecteur-h5');
+      try { code = await h5.scanFile(fichier, false); } finally { try { h5.clear(); } catch (e) {} montrer(zone, false); montrer($('zone-lecteur'), false); }
+    }
+    if (code) traiterCode(code); else messageScan("Aucun code lu sur la photo. Rapprochez-vous et recommencez, ou saisissez le code.", true);
+  } catch (e) {
+    messageScan("Aucun code lu sur la photo. Rapprochez-vous et recommencez, ou saisissez le code.", true);
+  }
+};
+
+/* ---------- Produit trouvé ou à créer ---------- */
+async function traiterCode(brut) {
+  var code = String(brut).replace(/\s+/g, '');
+  if (!code) return;
+  messageScan('Recherche du produit ' + code + '…');
+  try {
+    var r = await appeler('produit', { code: code });
+    messageScan('Appuyez sur « Démarrer la caméra ».');
+    if (r.produit) ouvrirProduit(r.produit); else ouvrirCreation(code);
+  } catch (e) {
+    messageScan(e.message, true);
+    if (/Code d'accès/.test(e.message)) ouvrirConnexion(e.message);
+  }
+}
+
+function datePer(texte) {
+  var m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(texte || '');
+  return m ? new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])) : null;
+}
+function etatPer(texte) {
+  var d = datePer(texte); if (!d) return null;
+  var auj = new Date(); auj.setHours(0, 0, 0, 0);
+  var jours = Math.round((d - auj) / 86400000);
+  if (jours < 0) return { classe: 'rouge', texte: 'Périmé depuis le ' + texte };
+  if (jours <= JOURS_PEREMPTION_PROCHE) return { classe: 'orange', texte: 'Périme le ' + texte + ' (' + jours + ' j)' };
+  return { classe: '', texte: 'Périme le ' + texte };
+}
+
+function ouvrirProduit(p) {
+  etat.produit = p;
+  $('p-nom').textContent = p.nom;
+  $('p-infos').textContent = [p.categorie, p.emplacement, p.code].filter(Boolean).join(' · ');
+  $('p-stock').textContent = nombre(p.stock);
+  $('p-unite').textContent = p.unite || '';
+  montrer($('p-alerte'), p.alerte);
+  var per = etatPer(p.peremption);
+  $('p-per').innerHTML = per ? '<span class="pastille ' + per.classe + '">' + esc(per.texte) + '</span>' : '';
+  $('q').value = 1; $('per').value = ''; $('note').value = '';
+  erreur('p-err', '');
+  choisirType('Entrée');
+  vue('produit');
+}
+function choisirType(t) {
+  etat.type = t;
+  $('t-entree').classList.toggle('choisi', t === 'Entrée');
+  $('t-sortie').classList.toggle('choisi', t === 'Sortie');
+  montrer($('bloc-per'), t === 'Entrée');
+  $('p-ok').textContent = t === 'Entrée' ? 'Enregistrer l\'entrée' : 'Enregistrer la sortie';
+}
+$('t-entree').onclick = function () { choisirType('Entrée'); };
+$('t-sortie').onclick = function () { choisirType('Sortie'); };
+$('q-moins').onclick = function () { $('q').value = Math.max(0, (Number($('q').value) || 0) - 1); };
+$('q-plus').onclick = function () { $('q').value = (Number($('q').value) || 0) + 1; };
+$('p-annuler').onclick = function () { vue('scan'); };
+
+$('p-ok').onclick = async function () {
+  var q = Number($('q').value);
+  if (!(q > 0)) return erreur('p-err', 'Indiquez une quantité supérieure à 0.');
+  erreur('p-err', '');
+  $('p-ok').disabled = true;
+  var base = { code: etat.produit.code, type: etat.type, quantite: q, peremption: $('per').value, benevole: lire('es_nom'), note: $('note').value };
+  try {
+    var r;
+    try { r = await appeler('mouvement', base); }
+    catch (e) {
+      if (e.donnees && e.donnees.stockInsuffisant && confirm('Il ne reste que ' + nombre(e.donnees.stock) + ' en stock. Enregistrer quand même cette sortie ?')) {
+        r = await appeler('mouvement', Object.assign({ forcer: true }, base));
+      } else throw e;
+    }
+    toast((etat.type === 'Entrée' ? 'Entrée de ' : 'Sortie de ') + nombre(q) + ' enregistrée. Stock : ' + nombre(r.produit.stock));
+    etat.stock = [];
+    vue('scan'); messageScan('Appuyez sur « Démarrer la caméra ».');
+  } catch (e) {
+    erreur('p-err', e.message);
+    if (/Code d'accès/.test(e.message)) ouvrirConnexion(e.message);
+  }
+  $('p-ok').disabled = false;
+};
+
+/* ---------- Nouveau produit ---------- */
+function remplir(select, valeurs) {
+  select.innerHTML = '<option value="">—</option>' + (valeurs || []).map(function (v) { return '<option>' + esc(v) + '</option>'; }).join('');
+}
+function ouvrirCreation(code) {
+  var l = etat.listes || { categories: [], unites: [] };
+  remplir($('n-cat'), l.categories); remplir($('n-unite'), l.unites);
+  $('n-code').value = code; $('n-nom').value = ''; $('n-empl').value = ''; $('n-seuil').value = 0;
+  erreur('n-err', '');
+  vue('creer');
+}
+$('n-annuler').onclick = function () { vue('scan'); };
+$('n-ok').onclick = async function () {
+  if (!$('n-nom').value.trim()) return erreur('n-err', 'Le nom du produit est obligatoire.');
+  erreur('n-err', ''); $('n-ok').disabled = true;
+  try {
+    var r = await appeler('creerProduit', {
+      code: $('n-code').value, nom: $('n-nom').value, categorie: $('n-cat').value,
+      unite: $('n-unite').value, emplacement: $('n-empl').value, seuil: $('n-seuil').value
+    });
+    etat.stock = [];
+    toast('Produit créé. Enregistrez maintenant son entrée.');
+    ouvrirProduit(r.produit);
+  } catch (e) { erreur('n-err', e.message); }
+  $('n-ok').disabled = false;
+};
+
+/* ---------- Liste du stock ---------- */
+async function ouvrirStock() {
+  vue('stock');
+  $('s-liste').innerHTML = 'Chargement…';
+  try { etat.stock = (await appeler('stock')).produits; afficherStock(); }
+  catch (e) {
+    $('s-liste').innerHTML = '<p class="msg err">' + esc(e.message) + '</p>';
+    if (/Code d'accès/.test(e.message)) ouvrirConnexion(e.message);
+  }
+}
+function afficherStock() {
+  var mot = $('s-recherche').value.trim().toLowerCase();
+  var liste = etat.stock.filter(function (p) {
+    if (mot && (p.nom + ' ' + p.code + ' ' + p.categorie + ' ' + p.emplacement).toLowerCase().indexOf(mot) < 0) return false;
+    if (etat.filtre === 'alerte') return p.alerte;
+    if (etat.filtre === 'per') { var e = etatPer(p.peremption); return e && e.classe !== ''; }
+    return true;
+  });
+  $('s-liste').innerHTML = liste.length ? liste.map(function (p, i) {
+    var per = etatPer(p.peremption);
+    return '<div class="ligne" data-i="' + etat.stock.indexOf(p) + '"><div><span class="nom">' + esc(p.nom) + '</span>' +
+      '<small>' + esc([p.categorie, p.emplacement].filter(Boolean).join(' · ')) + '</small>' +
+      (per ? '<span class="pastille ' + per.classe + '" style="margin-top:4px">' + esc(per.texte) + '</span>' : '') + '</div>' +
+      '<div class="droite"><b>' + nombre(p.stock) + '</b> ' + esc(p.unite) +
+      (p.alerte ? '<br><span class="pastille rouge">Bas</span>' : '') + '</div></div>';
+  }).join('') : '<p>Aucun produit.</p>';
+}
+$('s-liste').onclick = function (e) {
+  var ligne = e.target.closest('.ligne'); if (ligne) ouvrirProduit(etat.stock[Number(ligne.dataset.i)]);
+};
+$('s-recherche').oninput = afficherStock;
+$('s-filtres').onclick = function (e) {
+  var b = e.target.closest('button'); if (!b) return;
+  etat.filtre = b.dataset.f;
+  document.querySelectorAll('#s-filtres button').forEach(function (x) { x.classList.toggle('choisi', x === b); });
+  afficherStock();
+};
+
+/* ---------- Navigation ---------- */
+$('nav').onclick = function (e) {
+  var b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.v === 'stock') ouvrirStock(); else vue('scan');
+};
+
+/* ---------- Démarrage ---------- */
+if (adresseApi() && lire('es_pin') && lire('es_nom')) demarrer(); else ouvrirConnexion();
+</script>
+</body>
+</html>
